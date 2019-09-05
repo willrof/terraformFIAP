@@ -1,39 +1,44 @@
+# Configure the Microsoft Azure Provider.
+
 provider "azurerm" {
-    version = "=1.27.0"
+    version = "=1.20.0"
+
+subscription_id = "60ca7f66-55c6-4814-838f-fb798ac1c963"
 }
 
+# Create a resource group
 resource "azurerm_resource_group" "rg" {
-    name     = "myNACResourceGroup"
-    location = "${var.location}"
-    tags = {
-        environment = "NAC sandbox"
-    }
+    name     = "myTFResourceGroup"
+    location = "westus2"
 }
-
+# Create virtual network
 resource "azurerm_virtual_network" "vnet" {
-    name                = "myNACVnet"
+    name                = "mNACnet"
     address_space       = ["10.0.0.0/16"]
-    location            = "${var.location}"
+    location            = "westus2"
     resource_group_name = "${azurerm_resource_group.rg.name}"
 }
 
+# Create subnet
 resource "azurerm_subnet" "subnet" {
-    name                 = "myNACSubnet"
+    name                 = "myTFSubnet"
     resource_group_name  = "${azurerm_resource_group.rg.name}"
     virtual_network_name = "${azurerm_virtual_network.vnet.name}"
     address_prefix       = "10.0.1.0/24"
 }
 
+# Create public IP
 resource "azurerm_public_ip" "publicip" {
-    name                         = "myNACPublicIP"
-    location                     = "${var.location}"
+    name                         = "myNACpublicIP"
+    location                     = "westus2"
     resource_group_name          = "${azurerm_resource_group.rg.name}"
-    allocation_method            = "Static"
+    public_ip_address_allocation = "dynamic"
 }
 
+# Create Network Security Group and rule
 resource "azurerm_network_security_group" "nsg" {
-    name                = "myNACNSG"
-    location            = "${var.location}"
+    name                = "myNACSG"
+    location            = "westus2"
     resource_group_name = "${azurerm_resource_group.rg.name}"
 
     security_rule {
@@ -49,9 +54,10 @@ resource "azurerm_network_security_group" "nsg" {
     }
 }
 
+# Create network interface
 resource "azurerm_network_interface" "nic" {
     name                      = "myNIC"
-    location                  = "${var.location}"
+    location                  = "westus2"
     resource_group_name       = "${azurerm_resource_group.rg.name}"
     network_security_group_id = "${azurerm_network_security_group.nsg.id}"
 
@@ -63,15 +69,16 @@ resource "azurerm_network_interface" "nic" {
     }
 }
 
+# Create a Linux virtual machine
 resource "azurerm_virtual_machine" "vm" {
     name                  = "myNACVM"
-    location              = "${var.location}"
+    location              = "westus2"
     resource_group_name   = "${azurerm_resource_group.rg.name}"
     network_interface_ids = ["${azurerm_network_interface.nic.id}"]
     vm_size               = "Standard_DS1_v2"
 
     storage_os_disk {
-        name              = "myOsDisk"
+        name              = "Disk1"
         caching           = "ReadWrite"
         create_option     = "FromImage"
         managed_disk_type = "Premium_LRS"
@@ -85,37 +92,13 @@ resource "azurerm_virtual_machine" "vm" {
     }
 
     os_profile {
-        computer_name  = "myNACVM"
-        admin_username = "plankton"
-        admin_password = "Password1234!"
+        computer_name  = "NACVM"
+        admin_username = "Cloud"
+        admin_password = "Cloud321!@#"
     }
 
     os_profile_linux_config {
         disable_password_authentication = false
     }
-    provisioner "file" {
-        connection {
-            type     = "ssh"
-            user     = "NaCloud"
-            password = "Password1234!@#"
-            host     = "${azurerm_public_ip.publicip.ip_address}"
-        }
 
-        source      = "newfile.txt"
-        destination = "newfile.txt"
-    }
-
-    provisioner "remote-exec" {
-        connection {
-            type     = "ssh"
-            user     = "plankton"
-            password = "Password1234!"
-            host     = "${azurerm_public_ip.publicip.ip_address}"
-        }
-
-        inline = [
-        "ls -a",
-        "cat newfile.txt"
-        ]
-    }
 }
